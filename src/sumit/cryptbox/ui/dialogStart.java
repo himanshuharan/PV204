@@ -2,6 +2,24 @@ package sumit.cryptbox.ui;
 
 import javax.swing.JOptionPane;
 
+//------------Added by Himanshu------------//
+import java.security.MessageDigest;
+import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.security.spec.KeySpec;
+import java.util.Formatter;
+
+import java.util.Random;
+
+import javax.crypto.Mac;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.SecretKeySpec;
+//------------Added by Himanshu------------//
+
+
 public class dialogStart extends javax.swing.JDialog
 {
     public String strMessageDigestAlgorithm;
@@ -10,6 +28,130 @@ public class dialogStart extends javax.swing.JDialog
     public boolean boolCryptAction;
     public boolean boolOriginalFileDelete;
     public boolean boolStart;
+    
+    //-----------------Added by Himanshu-------------------------//
+    public static final int AES_KEY_LEN = 32;
+    
+    private static byte SK[] = new byte[AES_KEY_LEN];
+    private static byte MK[] = new byte[AES_KEY_LEN];
+    //-----------------Added by Himanshu-------------------------//    
+    
+
+    //-----------------Added by Himanshu-------------------------//
+    public static String sha256(String base) {
+        try{
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(base.getBytes("UTF-8"));
+            StringBuffer hexString = new StringBuffer();
+
+            for (int i = 0; i < hash.length; i++) {
+                String hex = Integer.toHexString(0xff & hash[i]);
+                if(hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+
+            return hexString.toString();
+        } catch(Exception ex){
+           throw new RuntimeException(ex);
+        }
+    }
+    
+    private static byte[] pbkdf(String strPassword, byte [] strSalt, int nIterations, int nKeyLen) {
+        byte[] baDerived = null;
+        try {
+            SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");
+            KeySpec ks = new PBEKeySpec(strPassword.toCharArray(), strSalt, nIterations, nKeyLen * 8);
+            SecretKey s = f.generateSecret(ks);
+            baDerived = s.getEncoded();
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return baDerived;
+    }
+
+
+    public static void deriveSessionKeyMacKey(String P, byte [] R1, byte [] R2){
+        int c = 100, dkLen = AES_KEY_LEN;
+        byte [] sessionKey = pbkdf(sha256(P), R1, c, dkLen);
+        byte [] macKey = pbkdf(sha256(P), R2, c, dkLen);
+        for(int i=0 ; i<AES_KEY_LEN ; i++){
+            SK[i] = sessionKey[i];
+            MK[i] = macKey[i];
+        }
+        System.out.println(toHex(SK));
+        System.out.println(toHex(MK));
+    }
+
+    
+    private static String toHex(byte[] ba) {
+        String strHex = null;
+        if (ba != null) {
+            StringBuilder sb = new StringBuilder(ba.length * 2);
+            Formatter formatter = new Formatter(sb);
+
+            for (byte b : ba) {
+                formatter.format("%02x", b);
+            }
+
+            formatter.close();
+            strHex = sb.toString().toLowerCase();
+        }
+        return strHex;
+    }
+
+    
+    
+    public static byte[] genRandom( int randLen ) {
+        byte R[] = new byte[randLen];
+        Random randomGenerator = new Random();
+        for( int i=0 ; i<randLen; i++ ){
+            R[i] = (byte)( randomGenerator.nextInt() & 0xff );
+        }
+        System.out.println("Random string" + toHex(R));
+        return R;
+    }
+    
+    public static byte [] getCommand( String P , int cmd ){
+        if( cmd == 1){
+            byte cmdBuf[] = new byte[240];
+            cmdBuf[0] = 0x00;
+            cmdBuf[1] = 0x00;
+            cmdBuf[2] = 0x00;
+            cmdBuf[3] = 0x00;
+            cmdBuf[4] = 0x00;
+            
+            byte [] R1 = genRandom(16);
+            byte [] R2 = genRandom(16);
+            byte [] Rp = genRandom(16);
+            deriveSessionKeyMacKey( P , R1, R2);
+            
+            return cmdBuf;
+        }
+        else if( cmd == 2 ){
+            byte cmdBuf[] = new byte[240];
+            return cmdBuf;
+        }
+        else if( cmd == 3 ){
+            byte cmdBuf[] = new byte[240];
+            return cmdBuf;
+        }
+        else{
+            byte cmdBuf[] = new byte[240];
+            return cmdBuf;
+        }
+    }
+    
+    public static void protocolAutomata( String pin ){
+        
+    }
+
+    
+    
+    //-----------------Added by Himanshu-------------------------//    
+ 
+    
     
     public dialogStart(boolean blnArgCryptAction)
     {
@@ -285,6 +427,14 @@ public class dialogStart extends javax.swing.JDialog
         {
             if(CheckPassword(new String(passFieldPassword.getPassword()), new String(passFieldRePassword.getPassword())) == 0 && CheckPasswordHashIteration(txtPasswordHashIteration.getText()) == 0)
             {
+                //Added by Himanshu
+                System.out.println( sha256("Himanshu") );
+                //For verification: 4e86db60da543df8abdc3ac8ceabf3faf90952d2a41085c1403ec452b6062d85
+
+                byte[] salt = new byte[] {1,2,3,4,5};
+                deriveSessionKeyMacKey("1234", salt , salt );
+
+                
                 strMessageDigestAlgorithm = cmbMessageDigestAlgorithm.getSelectedItem().toString();
                 intPasswordHashIteration = Integer.parseInt(txtPasswordHashIteration.getText());
                 strPassword = new String(passFieldPassword.getPassword());

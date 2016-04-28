@@ -8,7 +8,7 @@ public class dialogReEnter extends javax.swing.JDialog
     public int intPasswordHashIteration;
     public String strPassword;
     public boolean boolReEnter;
-    
+
     public dialogReEnter()
     {
         initComponents();
@@ -143,6 +143,7 @@ public class dialogReEnter extends javax.swing.JDialog
         {
             if (CheckPasswordHashIteration(txtPasswordHashIteration.getText()) == 0)
             {
+                
                 strMessageDigestAlgorithm = cmbMessageDigestAlgorithm.getSelectedItem().toString();
                 intPasswordHashIteration = Integer.parseInt(txtPasswordHashIteration.getText());
                 strPassword = new String(passFieldPassword.getPassword());
