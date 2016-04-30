@@ -3,6 +3,9 @@ package sumit.cryptbox.ui;
 import javax.swing.JOptionPane;
 
 //------------Added by Himanshu------------//
+import applets.SimpleApplet;
+import simpleapdu.CardMngr;
+
 import java.security.MessageDigest;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
@@ -13,6 +16,7 @@ import java.util.Formatter;
 import java.util.Random;
 
 import javax.crypto.Mac;
+import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
@@ -30,14 +34,60 @@ public class dialogStart extends javax.swing.JDialog
     public boolean boolStart;
     
     //-----------------Added by Himanshu-------------------------//
+    static CardMngr cardManager = new CardMngr();
+    private static byte APPLET_AID[] = {(byte) 0x4C, (byte) 0x61, (byte) 0x62, (byte) 0x61, (byte) 0x6B,
+        (byte) 0x41, (byte) 0x70, (byte) 0x70, (byte) 0x6C, (byte) 0x65, (byte) 0x74};
+    // INSTRUCTIONS
+    final static byte CLA_SIMPLEAPPLET               = (byte) 0xB0;
+    final static byte INS_ENCRYPT                    = (byte) 0x50;
+    final static byte INS_DECRYPT                    = (byte) 0x51;
+    final static byte INS_SETKEY                     = (byte) 0x52;
+    final static byte INS_HASH                       = (byte) 0x53;
+    final static byte INS_RANDOM                     = (byte) 0x54;
+    
     public static final int AES_KEY_LEN = 32;
     
     private static byte SK[] = new byte[AES_KEY_LEN];
     private static byte MK[] = new byte[AES_KEY_LEN];
     //-----------------Added by Himanshu-------------------------//    
+
+
+    public static void sha256() {
+        try {
+            // Prepare simulated card 
+            byte[] installData = new byte[10]; // no special install data passed now - can be used to pass initial keys etc.
+            cardManager.prepareLocalSimulatorApplet(APPLET_AID, installData, SimpleApplet.class);      
+            
+            // TODO: prepare proper APDU command
+            short additionalDataLen = 4;
+            byte apdu[] = new byte[CardMngr.HEADER_LENGTH + additionalDataLen];
+            apdu[CardMngr.OFFSET_CLA] = (byte) CLA_SIMPLEAPPLET;
+            apdu[CardMngr.OFFSET_INS] = (byte) INS_HASH;
+            apdu[CardMngr.OFFSET_P1] = (byte) 0x00;
+            apdu[CardMngr.OFFSET_P2] = (byte) 0x00;
+            apdu[CardMngr.OFFSET_LC] = (byte) additionalDataLen;
+            
+            byte[] response = cardManager.sendAPDUSimulator(apdu); 
+            
+        } catch (Exception ex) {
+            System.out.println("Exception : " + ex);
+        }
+    }
+
+    
     
 
     //-----------------Added by Himanshu-------------------------//
+    //Cipher.getAlgorithm("AES/ECB/PKCS5Padding")
+    public static byte [] encrypt( byte [] cmdBuf ) throws Exception {
+        SecretKeySpec aesEncryptionKey = new SecretKeySpec( SK , "AES");
+        Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+        cipher.init(Cipher.ENCRYPT_MODE , aesEncryptionKey);
+        byte[] encCmdBuf = cipher.doFinal( cmdBuf );
+        System.out.println("Ciphertext = " + toHex(encCmdBuf));
+        return encCmdBuf;
+    }
+    
     public static String sha256(String base) {
         try{
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -80,8 +130,8 @@ public class dialogStart extends javax.swing.JDialog
             SK[i] = sessionKey[i];
             MK[i] = macKey[i];
         }
-        System.out.println(toHex(SK));
-        System.out.println(toHex(MK));
+        System.out.println("Session Key = " + toHex(SK));
+        System.out.println("MAC Key = " + toHex(MK));
     }
 
     
@@ -432,7 +482,11 @@ public class dialogStart extends javax.swing.JDialog
                 //For verification: 4e86db60da543df8abdc3ac8ceabf3faf90952d2a41085c1403ec452b6062d85
 
                 byte[] salt = new byte[] {1,2,3,4,5};
+                byte[] pt = new byte[] {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
                 deriveSessionKeyMacKey("1234", salt , salt );
+                //encrypt( pt );
+                System.out.println("SHA256 of hex-string 00 00 00 00: ");
+                sha256();//Verified with http://www.fileformat.info/tool/hash.htm
 
                 
                 strMessageDigestAlgorithm = cmbMessageDigestAlgorithm.getSelectedItem().toString();
