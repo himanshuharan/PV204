@@ -75,6 +75,7 @@ public class dialogStart extends javax.swing.JDialog
     private static byte hash[] = new byte[AES_KEY_LEN]; //Variable which store result of sha256
     private static byte tag[] = new byte[MAC_LEN];      //Variable which store MAC, result of computeMAC
     private static byte PL[] = new byte[CT_LEN];        //Variable which store ciphertext, result of aes256
+    private static byte ENC_KEY[] = new byte[AES_KEY_LEN];   //File Encryption Key
 
     private static byte requestEncKeyFlag = 0;
     private static byte requestResetPinFlag = 0;
@@ -339,7 +340,7 @@ public class dialogStart extends javax.swing.JDialog
                 computeMACSim( tempBuf );
                 System.arraycopy(tag, 0, cmdBuf, 64, 16);
                 
-                System.out.println("\nR1: ");
+                /*System.out.println("\nR1: ");
                 for( int i=0 ; i<R1.length ; i++ )
                     System.out.print("(byte) " + String.format("0x%02X", R1[i]) + ",");
                 
@@ -369,8 +370,9 @@ public class dialogStart extends javax.swing.JDialog
                 
                 System.out.println("\nAPDU: ");
                 for( int i=0 ; i<cmdBuf.length ; i++ )
-                    System.out.print("(byte) " + String.format("0x%02X", cmdBuf[i]) + ",");
+                    System.out.print("(byte) " + String.format("0x%02X", cmdBuf[i]) + ",");*/
 
+                System.out.println("GET-COMMAND KEY SETUP: ");
                 System.out.println( "\nPIN: " + toHex(PIN) );
                 System.out.println( "\nR1: " + toHex(R1) );
                 System.out.println( "\nR2: " + toHex(R2) );
@@ -408,9 +410,16 @@ public class dialogStart extends javax.swing.JDialog
                 computeMACSim( tempBuf );
                 System.arraycopy(tag, 0, cmdBuf, 48, 16);
 
-                System.out.println("\nAPDU: ");
+                /*System.out.println("\nAPDU: ");
                 for( int i=0 ; i<cmdBuf.length ; i++ )
-                    System.out.print("(byte) " + String.format("0x%02X", cmdBuf[i]) + ",");
+                    System.out.print("(byte) " + String.format("0x%02X", cmdBuf[i]) + ",");*/
+                
+                System.out.println("GET-COMMAND KEY SETUP: ");
+                System.out.println( "\nRP: " + toHex(RP) );
+                System.out.println( "\nRC: " + toHex(RC) );
+                System.out.println( "\nPL: " + toHex(PL) );
+                System.out.println( "\nTag: " + toHex(tag) );
+                System.out.println( "\ncmdBuf: " + toHex(cmdBuf) );
 
                 return cmdBuf;
             }
@@ -441,6 +450,13 @@ public class dialogStart extends javax.swing.JDialog
                 computeMACSim( tempBuf );
                 System.arraycopy(tag, 0, cmdBuf, 64, 16);
 
+                System.out.println("GET-COMMAND KEY SETUP: ");
+                System.out.println( "\nRP: " + toHex(RP) );
+                System.out.println( "\nRC: " + toHex(RC) );
+                System.out.println( "\nPL: " + toHex(PL) );
+                System.out.println( "\nTag: " + toHex(tag) );
+                System.out.println( "\ncmdBuf: " + toHex(cmdBuf) );
+                
                 return cmdBuf;
             }
             default:
@@ -456,6 +472,7 @@ public class dialogStart extends javax.swing.JDialog
         switch (cmd) {
             case INS_KEY_SETUP:
             {
+                System.out.println( "DECODE-COMMAND KEY-SETUP: ");
                 byte cmdBuf[] = new byte[32];
                 //Compute MAC of response of javacard and compare with received MAC
                 System.arraycopy(rxCmd, 0, cmdBuf, 0, 32);
@@ -483,7 +500,7 @@ public class dialogStart extends javax.swing.JDialog
                 RC[15] = (byte)(RC[15] + 1);
                 
                 
-                System.out.println("\nRx-APDU: ");
+                /*System.out.println("\nRx-APDU: ");
                 for( int i=0 ; i<rxCmd.length ; i++ )
                     System.out.print("(byte) " + String.format("0x%02X", rxCmd[i]) + ",");
                 
@@ -501,7 +518,7 @@ public class dialogStart extends javax.swing.JDialog
                 
                 System.out.println("\nRC: ");
                 for( int i=0 ; i<RC.length ; i++ )
-                    System.out.print("(byte) " + String.format("0x%02X", RC[i]) + ",");
+                    System.out.print("(byte) " + String.format("0x%02X", RC[i]) + ",");*/
 
                 System.out.println( "\nRx-APDU: " + toHex(rxCmd) );
                 System.out.println( "\nRP: " + toHex(RP) );
@@ -511,6 +528,7 @@ public class dialogStart extends javax.swing.JDialog
             
             case INS_REQUEST_ENC_KEY:
             {
+                System.out.println( "DECODE-COMMAND REQUEST-ENC-KEY: ");
                 byte cmdBuf[] = new byte[64];
                 //Compute MAC of response of javacard and compare with received MAC
                 System.arraycopy(rxCmd, 0, cmdBuf, 0, 64);
@@ -542,7 +560,7 @@ public class dialogStart extends javax.swing.JDialog
                 RP[15] = (byte)(RP[15] + 1);
                 
                 
-                System.out.println("\nRx-APDU: ");
+                /*System.out.println("\nRx-APDU: ");
                 for( int i=0 ; i<rxCmd.length ; i++ )
                     System.out.print("(byte) " + String.format("0x%02X", rxCmd[i]) + ",");
                 
@@ -560,7 +578,7 @@ public class dialogStart extends javax.swing.JDialog
                 
                 System.out.println("\nRC: ");
                 for( int i=0 ; i<RC.length ; i++ )
-                    System.out.print("(byte) " + String.format("0x%02X", RC[i]) + ",");
+                    System.out.print("(byte) " + String.format("0x%02X", RC[i]) + ",");*/
 
                 System.out.println( "\nRx-APDU: " + toHex(rxCmd) );
                 System.out.println( "\nPL: " + toHex(PL) );
@@ -571,16 +589,18 @@ public class dialogStart extends javax.swing.JDialog
 
             case INS_RESET_PIN:
             {
+                System.out.println( "DECODE-COMMAND RESET-PIN: ");
                 byte cmdBuf[] = new byte[32];
                 //Compute MAC of response of javacard and compare with received MAC
                 System.arraycopy(rxCmd, 0, cmdBuf, 0, 32);
                 computeMACSim( cmdBuf );
-                for( int i=0 ; i<32 ; i++ )
+                System.out.println( "\nTag: " + toHex(tag) );
+                for( int i=0 ; i<16 ; i++ )
                     if( tag[i] != rxCmd[i+32])
                         return RX_CMD_ERR;
                 
                 //Decrypt javacard response and compare received nonce against incremented transmitted nonce
-                aes256Sim(cmdBuf);
+                aes256DecryptSim(cmdBuf);
                 for( int i=0 ; i<15 ; i++ )
                     if( RP[i] != PL[i])
                         return 0;
@@ -588,14 +608,19 @@ public class dialogStart extends javax.swing.JDialog
                     return RX_CMD_ERR;
                 
                 //Increment Transmitted nonce
-                RP[15] = (byte)(RP[15] + 1);
+                RP[15] = (byte)(RP[15] + 2);
                 
                 //Save Javacard nonce
-                for( int i=0 ; i<16 ; i++ )
-                    RC[i] = PL[i+16];
+                for( int i=0 ; i<15 ; i++ )
+                    if( RC[i] != PL[i+16])
+                        return 0;
+                if( (byte)(RC[15] + 1) != PL[31] )
+                    return RX_CMD_ERR;
+                //Increment Transmitted nonce
+                RC[15] = (byte)(RC[15] + 1);
                 
                 
-                System.out.println("\nRx-APDU: ");
+                /*System.out.println("\nRx-APDU: ");
                 for( int i=0 ; i<rxCmd.length ; i++ )
                     System.out.print("(byte) " + String.format("0x%02X", rxCmd[i]) + ",");
                 
@@ -613,10 +638,9 @@ public class dialogStart extends javax.swing.JDialog
                 
                 System.out.println("\nRC: ");
                 for( int i=0 ; i<RC.length ; i++ )
-                    System.out.print("(byte) " + String.format("0x%02X", RC[i]) + ",");
+                    System.out.print("(byte) " + String.format("0x%02X", RC[i]) + ",");*/
 
                 System.out.println( "\nRx-APDU: " + toHex(rxCmd) );
-                System.out.println( "\nTag: " + toHex(tag) );
                 System.out.println( "\nPL: " + toHex(PL) );
                 System.out.println( "\nRP: " + toHex(RP) );
                 System.out.println( "\nRC: " + toHex(RC) );
@@ -688,12 +712,12 @@ public class dialogStart extends javax.swing.JDialog
                     if( decodeCommand(INS_KEY_SETUP , rxBuf) == 0 )
                         return 0;
 
-                txBuf = getCommand(INS_REQUEST_ENC_KEY);
+                txBuf = getCommand(INS_RESET_PIN);
                 rxBuf = sendToJavacard( txBuf );
                 if( ( rxBuf.length == 0x02 ) && (rxBuf[0] == 0x00) && (rxBuf[1] == 0x00) )
                     ISOException.throwIt( ISO7816.SW_APPLET_SELECT_FAILED ) ;
                 else
-                    if( decodeCommand(INS_REQUEST_ENC_KEY , rxBuf) == 0)
+                    if( decodeCommand(INS_RESET_PIN , rxBuf) == 0)
                         return 0;
             }
         }
@@ -868,11 +892,21 @@ public class dialogStart extends javax.swing.JDialog
         lblOriginalFileOption.setText("<html>Do you want to <b>delete the original file</b> after cryptography?\n<br></br>\n<br></br>\nIf Yes is selected, then original file will be deleted after successful\n<br></br>\ncryptographic action.</html>");
 
         btnGroupOriginalFileOption.add(rdBtnNo);
-        rdBtnNo.setText("No");
+        rdBtnNo.setText("Request Enc Key(No)");
+        rdBtnNo.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                rdBtnNoActionPerformed(evt);
+            }
+        });
 
         btnGroupOriginalFileOption.add(rdBtnYes);
         rdBtnYes.setSelected(true);
-        rdBtnYes.setText("Yes");
+        rdBtnYes.setText("Reset PIN(Yes)");
+        rdBtnYes.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                rdBtnYesActionPerformed(evt);
+            }
+        });
 
         javax.swing.GroupLayout paneloriginalFileOptionLayout = new javax.swing.GroupLayout(paneloriginalFileOption);
         paneloriginalFileOption.setLayout(paneloriginalFileOptionLayout);
@@ -881,12 +915,14 @@ public class dialogStart extends javax.swing.JDialog
             .addGroup(paneloriginalFileOptionLayout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(paneloriginalFileOptionLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(lblOriginalFileOption, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addGroup(paneloriginalFileOptionLayout.createSequentialGroup()
+                        .addComponent(lblOriginalFileOption, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                     .addGroup(paneloriginalFileOptionLayout.createSequentialGroup()
                         .addComponent(rdBtnYes)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(rdBtnNo)))
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(rdBtnNo)
+                        .addGap(112, 112, 112))))
         );
         paneloriginalFileOptionLayout.setVerticalGroup(
             paneloriginalFileOptionLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -999,19 +1035,30 @@ public class dialogStart extends javax.swing.JDialog
     private void btnOKActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnOKActionPerformed
         try
         {
-            if(CheckPassword(new String(passFieldPassword.getPassword()), new String(passFieldRePassword.getPassword())) == 0 && CheckPasswordHashIteration(txtPasswordHashIteration.getText()) == 0)
+            //if(CheckPassword(new String(passFieldPassword.getPassword()), new String(passFieldRePassword.getPassword())) == 0 && CheckPasswordHashIteration(txtPasswordHashIteration.getText()) == 0)
+            if( (new String(passFieldPassword.getPassword())).length() == 4 && (new String(passFieldRePassword.getPassword())).length() == 4 && CheckPasswordHashIteration(txtPasswordHashIteration.getText()) == 0)
             {
                 initSimulator();
 
                 String strPin = new String(passFieldPassword.getPassword());
                 System.arraycopy(strPin.getBytes(), 0, PIN, 0, 4);
                 
+                String strNewPin = new String(passFieldRePassword.getPassword());
+                System.arraycopy(strNewPin.getBytes(), 0, NEW_PIN, 0, 4);
+
                 //testDecodedCommand();
-                requestEncKeyFlag = 1;
-                PIN[0] = (byte) 0;
-                PIN[1] = (byte) 0;
-                PIN[2] = (byte) 0;
-                PIN[3] = (byte) 0;
+                //requestEncKeyFlag = 1;
+                //requestResetPinFlag = 0;
+                PIN[0] = (byte) (PIN[0] - 0x30);
+                PIN[1] = (byte) (PIN[1] - 0x30);
+                PIN[2] = (byte) (PIN[2] - 0x30);
+                PIN[3] = (byte) (PIN[3] - 0x30);
+                
+                NEW_PIN[0] = (byte) (NEW_PIN[0] - 0x30);
+                NEW_PIN[1] = (byte) (NEW_PIN[1] - 0x30);
+                NEW_PIN[2] = (byte) (NEW_PIN[2] - 0x30);
+                NEW_PIN[3] = (byte) (NEW_PIN[3] - 0x30);
+
                 secureProtocol( );
 
                 
@@ -1045,6 +1092,16 @@ public class dialogStart extends javax.swing.JDialog
             JOptionPane.showMessageDialog(this, ex, "CryptBox Error", JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_btnOKActionPerformed
+
+    private void rdBtnYesActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_rdBtnYesActionPerformed
+        // TODO add your handling code here:
+        requestResetPinFlag = 1;
+    }//GEN-LAST:event_rdBtnYesActionPerformed
+
+    private void rdBtnNoActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_rdBtnNoActionPerformed
+        // TODO add your handling code here:
+        requestEncKeyFlag = 1;
+    }//GEN-LAST:event_rdBtnNoActionPerformed
     //</editor-fold>
     
     //<editor-fold defaultstate="collapsed" desc="Check Password and RePassword match - CheckPassword">
