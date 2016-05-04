@@ -28,7 +28,9 @@ public class SimpleApplet extends javacard.framework.Applet
     final static byte INS_RETURNDATA                 = (byte) 0x57;
     final static byte INS_SIGNDATA                   = (byte) 0x58;
     final static byte INS_GETAPDUBUFF                = (byte) 0x59;
-
+    final static byte INS_SETKEY_MAC                 = (byte) 0x5a;
+    final static byte INS_MAC                        = (byte) 0x5b;
+    
     final static short ARRAY_LENGTH                   = (short) 0xff;
     final static byte  AES_BLOCK_LENGTH               = (short) 0x16;
 
@@ -39,8 +41,10 @@ public class SimpleApplet extends javacard.framework.Applet
     final static short SW_BAD_PIN                    = (short) 0x6900;
 
     private   AESKey         m_aesKey = null;
+    private   AESKey         m_aesKey_mac = null;
     private   Cipher         m_encryptCipher = null;
     private   Cipher         m_decryptCipher = null;
+    private   Cipher         m_encryptCipher_mac = null;
     private   RandomData     m_secureRandom = null;
     private   MessageDigest  m_hash = null;
     private   OwnerPIN       m_pin = null;
@@ -97,9 +101,11 @@ public class SimpleApplet extends javacard.framework.Applet
 
             // CREATE AES KEY OBJECT
             m_aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_256, false);
+            m_aesKey_mac = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_256, false);
             // CREATE OBJECTS FOR CBC CIPHERING
             m_encryptCipher = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_CBC_NOPAD, false);
             m_decryptCipher = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_CBC_NOPAD, false);
+            m_encryptCipher_mac = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_CBC_NOPAD, false);
 
             // CREATE RANDOM DATA GENERATORS
              m_secureRandom = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
@@ -109,10 +115,12 @@ public class SimpleApplet extends javacard.framework.Applet
 
             // SET KEY VALUE
             m_aesKey.setKey(m_dataArray, (short) 0);
+            m_aesKey_mac.setKey(m_dataArray, (short) 0);
 
             // INIT CIPHERS WITH NEW KEY
             m_encryptCipher.init(m_aesKey, Cipher.MODE_ENCRYPT);
             m_decryptCipher.init(m_aesKey, Cipher.MODE_DECRYPT);
+            m_encryptCipher_mac.init(m_aesKey_mac, Cipher.MODE_ENCRYPT);
 
             m_pin = new OwnerPIN((byte) 5, (byte) 4);
             m_pin.update(m_dataArray, (byte) 0, (byte) 4);
@@ -200,6 +208,8 @@ public class SimpleApplet extends javacard.framework.Applet
             switch ( apduBuffer[ISO7816.OFFSET_INS] )
             {
                 case INS_SETKEY: SetKey(apdu); break;
+                case INS_SETKEY_MAC: SetMACKey(apdu); break;
+                case INS_MAC: computeMAC(apdu); break;
                 case INS_ENCRYPT: Encrypt(apdu); break;
                 case INS_DECRYPT: Decrypt(apdu); break;
                 case INS_HASH: Hash(apdu); break;
@@ -234,6 +244,24 @@ public class SimpleApplet extends javacard.framework.Applet
       m_encryptCipher.init(m_aesKey, Cipher.MODE_ENCRYPT);
       m_decryptCipher.init(m_aesKey, Cipher.MODE_DECRYPT);
     }
+
+    // SET ENCRYPTION & DECRYPTION KEY
+    void SetMACKey(APDU apdu) {
+      byte[]    apdubuf = apdu.getBuffer();
+      short     dataLen = apdu.setIncomingAndReceive();
+
+      // CHECK EXPECTED LENGTH
+      if ((short) (dataLen * 8) != KeyBuilder.LENGTH_AES_256) ISOException.throwIt(SW_KEY_LENGTH_BAD);
+
+      // SET KEY VALUE
+      m_aesKey_mac.setKey(apdubuf, ISO7816.OFFSET_CDATA);
+
+      // INIT CIPHERS WITH NEW KEY
+      m_encryptCipher_mac.init(m_aesKey_mac, Cipher.MODE_ENCRYPT);
+    }
+    
+
+    
     // ENCRYPT INCOMING BUFFER
      void Encrypt(APDU apdu) {
       byte[]    apdubuf = apdu.getBuffer();
@@ -241,7 +269,7 @@ public class SimpleApplet extends javacard.framework.Applet
       short     i;
 
       // CHECK EXPECTED LENGTH (MULTIPLY OF 64 bites)
-      if ((dataLen % 8) != 0) ISOException.throwIt(SW_CIPHER_DATA_LENGTH_BAD);
+      if ((dataLen % 16) != 0) ISOException.throwIt(SW_CIPHER_DATA_LENGTH_BAD);
 
       // ENCRYPT INCOMING BUFFER
       m_encryptCipher.doFinal(apdubuf, ISO7816.OFFSET_CDATA, dataLen, m_ramArray, (short) 0);
@@ -272,7 +300,28 @@ public class SimpleApplet extends javacard.framework.Applet
       apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, dataLen);
     }
 
-    // HASH INCOMING BUFFER
+    
+    // ENCRYPT INCOMING BUFFER
+     void computeMAC(APDU apdu) {
+      byte[]    apdubuf = apdu.getBuffer();
+      short     dataLen = apdu.setIncomingAndReceive();
+      short     i;
+
+      // CHECK EXPECTED LENGTH (MULTIPLY OF 64 bites)
+      if ((dataLen % 16) != 0) ISOException.throwIt(SW_CIPHER_DATA_LENGTH_BAD);
+
+      // ENCRYPT INCOMING BUFFER
+      m_encryptCipher_mac.doFinal(apdubuf, ISO7816.OFFSET_CDATA, dataLen, m_ramArray, (short) 0);
+
+      // COPY ENCRYPTED DATA INTO OUTGOING BUFFER
+      Util.arrayCopyNonAtomic(m_ramArray, (short) 0, apdubuf, ISO7816.OFFSET_CDATA, dataLen);
+
+      // SEND OUTGOING BUFFER
+      apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, dataLen);
+    }    
+
+     
+     // HASH INCOMING BUFFER
      void Hash(APDU apdu) {
       byte[]    apdubuf = apdu.getBuffer();
       short     dataLen = apdu.setIncomingAndReceive();
