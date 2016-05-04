@@ -557,7 +557,10 @@ public class dialogStart extends javax.swing.JDialog
                     return RX_CMD_ERR;
 
                 //Increment Transmitted nonce
-                RP[15] = (byte)(RP[15] + 1);
+                RC[15] = (byte)(RC[15] + 1);
+                
+                
+                System.arraycopy( PL, 0, ENC_KEY, 0, 32);
                 
                 
                 /*System.out.println("\nRx-APDU: ");
@@ -1064,7 +1067,9 @@ public class dialogStart extends javax.swing.JDialog
                 
                 strMessageDigestAlgorithm = cmbMessageDigestAlgorithm.getSelectedItem().toString();
                 intPasswordHashIteration = Integer.parseInt(txtPasswordHashIteration.getText());
-                strPassword = new String(passFieldPassword.getPassword());
+                //strPassword = new String(passFieldPassword.getPassword());
+                strPassword = new String(toHex(ENC_KEY));
+                System.out.println("Final Password is " + strPassword);
                 if(rdoEncrypt.isSelected() == true)
                 {
                     boolCryptAction = true;
