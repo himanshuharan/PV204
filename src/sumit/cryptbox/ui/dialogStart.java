@@ -266,12 +266,14 @@ public class dialogStart extends javax.swing.JDialog
         }
         System.out.println("Session Key = " + toHex(SK));
         System.out.println("MAC Key = " + toHex(MK));*/
+        //Concatanate PIN and R1, compute sha256 and store it as SK
         byte [] buf = new byte[20];
         System.arraycopy(PIN, 0, buf, 0, 4);
         System.arraycopy(R1, 0, buf, 4, 16);
         sha256Sim( buf );
         System.arraycopy(hash, 0, SK, 0, 32);
 
+        //Concatanate PIN and R2, compute sha256 and store it as MK
         System.arraycopy(R2, 0, buf, 4, 16);
         sha256Sim( buf );
         System.arraycopy(hash, 0, MK, 0, 32);
@@ -279,7 +281,7 @@ public class dialogStart extends javax.swing.JDialog
         System.out.println("MAC Key = " + toHex(MK));
     }
 
-    
+    //Convert byte arry in hexstring for printable form
     private static String toHex(byte[] ba) {
         String strHex = null;
         if (ba != null) {
@@ -297,7 +299,7 @@ public class dialogStart extends javax.swing.JDialog
     }
 
     
-    
+    //Generate random data of len randLen
     public static byte[] genRandom( int randLen ) {
         byte R[] = new byte[randLen];
         Random randomGenerator = new Random();
@@ -308,6 +310,8 @@ public class dialogStart extends javax.swing.JDialog
         return R;
     }
     
+    
+    //Generate complete APDU frame of commad for given cmd
     public static byte [] getCommand( int cmd ){
         switch (cmd) {
             case INS_KEY_SETUP:
@@ -402,6 +406,7 @@ public class dialogStart extends javax.swing.JDialog
                 aes256Sim(buf);                
                 System.arraycopy(PL, 0, cmdBuf, 5, 32);
 
+                //Padding is required for MAC computation
                 for( int i=0 ; i<11 ; i++ )
                     cmdBuf[i+37] = 0;       //Padding
                 
@@ -442,6 +447,8 @@ public class dialogStart extends javax.swing.JDialog
                 
                 aes256Sim(buf);                
                 System.arraycopy(PL, 0, cmdBuf, 5, 48);
+                
+                //Padding is require for MAC computation to make it multiple of 16
                 for( int i=0 ; i<11 ; i++ )
                     cmdBuf[i+53] = 0;       //Padding
 
@@ -461,7 +468,7 @@ public class dialogStart extends javax.swing.JDialog
             }
             default:
             {
-                byte cmdBuf[] = new byte[240];
+                byte cmdBuf[] = new byte[80];
                 return cmdBuf;
             }
         }
@@ -549,14 +556,14 @@ public class dialogStart extends javax.swing.JDialog
                 //Increment Transmitted nonce
                 RP[15] = (byte)(RP[15] + 2);
                 
-                //Save Javacard nonce
+                //Check Javacard nonce
                 for( int i=0 ; i<15 ; i++ )
                     if( RC[i] != PL[i+48])
                         return 0;
                 if( (byte)(RC[15] + 1) != PL[63] )
                     return RX_CMD_ERR;
 
-                //Increment Transmitted nonce
+                //Increment Javacard nonce
                 RC[15] = (byte)(RC[15] + 1);
                 
                 
@@ -613,13 +620,13 @@ public class dialogStart extends javax.swing.JDialog
                 //Increment Transmitted nonce
                 RP[15] = (byte)(RP[15] + 2);
                 
-                //Save Javacard nonce
+                //Check Javacard nonce
                 for( int i=0 ; i<15 ; i++ )
                     if( RC[i] != PL[i+16])
                         return 0;
                 if( (byte)(RC[15] + 1) != PL[31] )
                     return RX_CMD_ERR;
-                //Increment Transmitted nonce
+                //Increment Javacard nonce
                 RC[15] = (byte)(RC[15] + 1);
                 
                 
@@ -658,6 +665,7 @@ public class dialogStart extends javax.swing.JDialog
     }
 
 
+    //Real communication with Javacard
     public static byte [] sendToJavacard( byte []cmdBuf ){
         byte[] nullResponse =  {(byte)0x00 , (byte)0x00};
         try {    
