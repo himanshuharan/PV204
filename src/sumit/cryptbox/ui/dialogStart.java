@@ -3,27 +3,37 @@ package sumit.cryptbox.ui;
 import javax.swing.JOptionPane;
 
 //------------Added by Himanshu------------//
+import javacardx.crypto.Cipher;
+
 import applets.SimpleApplet;
 import simpleapdu.CardMngr;
 import javax.smartcardio.ResponseAPDU;
 
 import java.security.MessageDigest;
-import java.io.ByteArrayOutputStream;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+//import java.io.ByteArrayOutputStream;
+//import java.nio.ByteBuffer;
+//import java.nio.ByteOrder;
 import java.security.spec.KeySpec;
 import java.util.Formatter;
 
 import java.util.Random;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+//import javacard.security.KeyBuilder;
+import javacard.security.RSAPublicKey;
 
-import javax.crypto.Mac;
-import javax.crypto.Cipher;
+//import javax.crypto.Mac;
+//import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
+
+//import javacard.framework.*;
+//import javacard.security.*;
+//import javacardx.crypto.*;
+import javacard.security.KeyBuilder;
+
 //------------Added by Himanshu------------//
 
 
@@ -58,6 +68,7 @@ public class dialogStart extends javax.swing.JDialog
     final static byte INS_KEY_SETUP                  = (byte) 0x60;
     final static byte INS_REQUEST_ENC_KEY            = (byte) 0x61;
     final static byte INS_RESET_PIN                  = (byte) 0x62;
+    final static byte INS_GET_RSA_PUBLIC_KEY         = (byte) 0x64;
     
     public static final int AES_KEY_LEN = 32;
     public static final int MAC_LEN = 16;
@@ -213,14 +224,6 @@ public class dialogStart extends javax.swing.JDialog
     
     //-----------------Added by Himanshu-------------------------//
     //Cipher.getAlgorithm("AES/ECB/PKCS5Padding")
-    public static byte [] encrypt( byte [] cmdBuf ) throws Exception {
-        SecretKeySpec aesEncryptionKey = new SecretKeySpec( SK , "AES");
-        Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-        cipher.init(Cipher.ENCRYPT_MODE , aesEncryptionKey);
-        byte[] encCmdBuf = cipher.doFinal( cmdBuf );
-        System.out.println("Ciphertext = " + toHex(encCmdBuf));
-        return encCmdBuf;
-    }
     
     public static String sha256(String base) {
         try{
@@ -386,7 +389,10 @@ public class dialogStart extends javax.swing.JDialog
                 System.out.println( "\nMK: " + toHex(MK) );
                 System.out.println( "\nTag: " + toHex(tag) );
                 System.out.println( "\nAPDU: " + toHex(cmdBuf) );
-                return cmdBuf;
+                
+                byte[] encCmdBuf = new byte[133];
+                encryptByJavacardPublicKey(cmdBuf , encCmdBuf);
+                return encCmdBuf;
             }
             
             case INS_REQUEST_ENC_KEY:
@@ -656,7 +662,6 @@ public class dialogStart extends javax.swing.JDialog
                 System.out.println( "\nRC: " + toHex(RC) );
                 return CMD_DECODE_SUCCESS;
             }
-
             default:
             {
                 return RX_CMD_ERR;
@@ -664,7 +669,55 @@ public class dialogStart extends javax.swing.JDialog
         }
     }
 
+    public static void encryptByJavacardPublicKey(byte []message , byte[]cipherText) {
+        byte[] response = null;
+        // TODO: prepare proper APDU command
+        short additionalDataLen = (short) 0;
+        byte apdu[] = new byte[CardMngr.HEADER_LENGTH + additionalDataLen];
+        apdu[CardMngr.OFFSET_CLA] = (byte) CLA_SIMPLEAPPLET;
+        apdu[CardMngr.OFFSET_INS] = (byte) INS_GET_RSA_PUBLIC_KEY;
+        apdu[CardMngr.OFFSET_P1] = (byte) 0x00;
+        apdu[CardMngr.OFFSET_P2] = (byte) 0x00;
+        apdu[CardMngr.OFFSET_LC] = (byte) additionalDataLen;
 
+        response = sendToJavacard( apdu );
+            
+            
+        Cipher       rsaCipher = null;
+        RSAPublicKey pubkey = null;
+
+        byte         modulus[] = new byte[128];
+        byte         exponent[] = new byte[3];
+        int i,k=1;
+        short modlen = 128, explen = 3;
+
+
+        //modulus[0]= (byte) 0; //SET the MSB of Modulus to 0
+        for( i=9 ; i<=136 ; i++){
+            modulus[i-9]=response[i];
+            //k++;  
+        }
+
+        //modulus[k]=response[136];
+        for(i=139;i<142;i++) {
+            exponent[i-139]=response[i];
+        }        
+        pubkey = (RSAPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_1024, true);
+        pubkey.setExponent(exponent, (short) 0, explen);
+        pubkey.setModulus(modulus,(short) 0, modlen); 
+
+        rsaCipher = Cipher.getInstance(Cipher.ALG_RSA_PKCS1, false);    
+        rsaCipher.init(pubkey, Cipher.MODE_ENCRYPT);    
+
+        cipherText[0] = CLA_SIMPLEAPPLET;
+        cipherText[1] = INS_KEY_SETUP;
+        cipherText[2] = 0x00;
+        cipherText[3] = 0x00;
+        cipherText[4] = (byte) rsaCipher.doFinal(message,(short) 0,(short) message.length ,cipherText,(short) 5);
+        
+    }
+        
+    
     //Real communication with Javacard
     public static byte [] sendToJavacard( byte []cmdBuf ){
         byte[] nullResponse =  {(byte)0x00 , (byte)0x00};
@@ -687,7 +740,18 @@ public class dialogStart extends javax.swing.JDialog
     }
 
     public static int secureProtocol(  ){
-       
+        if( ( requestEncKeyFlag == 1) || ( requestResetPinFlag == 1) )
+        {
+            /*byte [] txBuf = getCommand(INS_GET_RSA_PUBLIC_KEY);
+            byte [] rxBuf = sendToJavacard( txBuf );
+            if( ( rxBuf.length == 0x02 ) && (rxBuf[0] == 0x00) && (rxBuf[1] == 0x00) )
+                ISOException.throwIt( ISO7816.SW_APPLET_SELECT_FAILED ) ;
+            else {
+                System.out.println("KEY SETUP: Decode Command");
+                if( decodeCommand(INS_GET_RSA_PUBLIC_KEY , rxBuf) == 0 )
+                    return 0;
+            }*/
+        }
         if( requestEncKeyFlag == 1) {
             requestEncKeyFlag = 0;
             System.out.println("KEY SETUP: Send Command");
@@ -1071,6 +1135,7 @@ public class dialogStart extends javax.swing.JDialog
                 NEW_PIN[3] = (byte) (NEW_PIN[3] - 0x30);
 
                 secureProtocol( );
+  
 
                 
                 strMessageDigestAlgorithm = cmbMessageDigestAlgorithm.getSelectedItem().toString();

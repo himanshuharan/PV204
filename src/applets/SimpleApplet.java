@@ -11,6 +11,8 @@ package applets;
 import javacard.framework.*;
 import javacard.security.*;
 import javacardx.crypto.*;
+import javacard.security.KeyBuilder;
+
 
 public class SimpleApplet extends javacard.framework.Applet
 {
@@ -30,6 +32,8 @@ public class SimpleApplet extends javacard.framework.Applet
     final static byte INS_GETAPDUBUFF                = (byte) 0x59;
     final static byte INS_SETKEY_MAC                 = (byte) 0x5a;
     final static byte INS_MAC                        = (byte) 0x5b;
+    final static byte INS_LOAD_RSA_PUBLIC_KEY        = (byte) 0x5c;
+    final static byte INS_ENCRYPT_RSA                = (byte) 0x5d;
     
     final static short ARRAY_LENGTH                   = (short) 0xff;
     final static byte  AES_BLOCK_LENGTH               = (short) 0x16;
@@ -52,12 +56,14 @@ public class SimpleApplet extends javacard.framework.Applet
     private   KeyPair        m_keyPair = null;
     private   Key            m_privateKey = null;
     private   Key            m_publicKey = null;
-
-    private   short          m_apduLogOffset = (short) 0;
+   
+    private   short               m_apduLogOffset = (short) 0;
     // TEMPORARRY ARRAY IN RAM
-    private   byte        m_ramArray[] = null;
+    private   byte                m_ramArray[] = null;
     // PERSISTENT ARRAY IN EEPROM
-    private   byte       m_dataArray[] = null;
+    private   byte                m_dataArray[] = null;
+    private   static Cipher       rsaCipher = null;
+    private   static RSAPublicKey pubkey = null;
 
     /**
      * LabakApplet default constructor
@@ -127,7 +133,8 @@ public class SimpleApplet extends javacard.framework.Applet
 
             // CREATE RSA KEYS AND PAIR
             m_keyPair = new KeyPair(KeyPair.ALG_RSA_CRT, KeyBuilder.LENGTH_RSA_1024);
-            
+            rsaCipher = Cipher.getInstance(Cipher.ALG_RSA_PKCS1, false);    
+           
             // INIT HASH ENGINE
             try {
                 m_hash = MessageDigest.getInstance(MessageDigest.ALG_SHA_256, false);
@@ -214,16 +221,14 @@ public class SimpleApplet extends javacard.framework.Applet
                 case INS_DECRYPT: Decrypt(apdu); break;
                 case INS_HASH: Hash(apdu); break;
                 case INS_RANDOM: Random(apdu); break;
-                case INS_VERIFYPIN: VerifyPIN(apdu); break;
-                case INS_SETPIN: SetPIN(apdu); break;
                 case INS_RETURNDATA: ReturnData(apdu); break;
-                case INS_SIGNDATA: Sign(apdu); break;
                 case INS_GETAPDUBUFF: GetAPDUBuff(apdu); break;
+                case INS_LOAD_RSA_PUBLIC_KEY: loadJavacardPublicKey(apdu) ; break;
+                case INS_ENCRYPT_RSA: rsaEncryption(apdu); break;
                 default :
                     // The INS code is not supported by the dispatcher
                     ISOException.throwIt( ISO7816.SW_INS_NOT_SUPPORTED ) ;
                 break ;
-
             }
         }
         else ISOException.throwIt( ISO7816.SW_CLA_NOT_SUPPORTED);
@@ -350,24 +355,7 @@ public class SimpleApplet extends javacard.framework.Applet
       apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, apdubuf[ISO7816.OFFSET_P1]);
     }
 
-    // VERIFY PIN
-     void VerifyPIN(APDU apdu) {
-      byte[]    apdubuf = apdu.getBuffer();
-      short     dataLen = apdu.setIncomingAndReceive();
 
-      // VERIFY PIN
-      if (m_pin.check(apdubuf, ISO7816.OFFSET_CDATA, (byte) dataLen) == false)
-      ISOException.throwIt(SW_BAD_PIN);
-    }
-
-     // SET PIN
-     void SetPIN(APDU apdu) {
-      byte[]    apdubuf = apdu.getBuffer();
-      short     dataLen = apdu.setIncomingAndReceive();
-
-      // SET NEW PIN
-      m_pin.update(apdubuf, ISO7816.OFFSET_CDATA, (byte) dataLen);
-    }
 
      void ReturnData(APDU apdu) {
       byte[]    apdubuf = apdu.getBuffer();
@@ -377,34 +365,6 @@ public class SimpleApplet extends javacard.framework.Applet
       apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, dataLen);
     }
 
-    void Sign(APDU apdu) {
-     byte[]    apdubuf = apdu.getBuffer();
-     short     dataLen = apdu.setIncomingAndReceive();
-     short     signLen = 0;
-
-
-     // STARTS KEY GENERATION PROCESS
-     m_keyPair.genKeyPair();
-
-     // OBTAIN KEY REFERENCES
-     m_publicKey = m_keyPair.getPublic();
-     m_privateKey = m_keyPair.getPrivate();
-
-     // CREATE SIGNATURE OBJECT
-     //Signature m_sign = Signature.getInstance(Signature.ALG_RSA_SHA_PKCS1, false);
-
-     // INIT WITH PRIVATE KEY
-     m_sign.init(m_privateKey, Signature.MODE_SIGN);
-
-     // SIGN INCOMING BUFFER
-     signLen = m_sign.sign(apdubuf, ISO7816.OFFSET_CDATA, (byte) dataLen, m_ramArray, (byte) 0);
-
-     // COPY ENCRYPTED DATA INTO OUTGOING BUFFER
-     Util.arrayCopyNonAtomic(m_ramArray, (short) 0, apdubuf, ISO7816.OFFSET_CDATA, signLen);
-
-     // SEND OUTGOING BUFFER
-     apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, signLen);
-   }
 
    void GetAPDUBuff(APDU apdu) {
     byte[]    apdubuf = apdu.getBuffer();
@@ -416,5 +376,41 @@ public class SimpleApplet extends javacard.framework.Applet
     // SEND OUTGOING BUFFER
     apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, tempLength);
   }
+
+   
+    public static void loadJavacardPublicKey( APDU apdu ){
+        byte[]    apdubuf = apdu.getBuffer();
+        short     dataLen = apdu.setIncomingAndReceive();
+        byte         modulus[] = new byte[129];
+        byte         exponent[] = new byte[3];
+
+        int i,k=0;
+        short modlen = 128, explen = 3;
+
+        modulus[0]= (byte) 0; //SET the MSB of Modulus to 0
+        for( i=10 ; i<137 ; i++){
+            modulus[k]=apdubuf[i+ISO7816.OFFSET_CDATA];
+            k++;  
+        }
+        
+        modulus[k]=apdubuf[137];
+        for(i=140;i<143;i++) {
+            exponent[i-140]=apdubuf[i+ISO7816.OFFSET_CDATA];
+        }        
+        pubkey = (RSAPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_1024, true);
+        pubkey.setExponent(exponent, (short) 0, explen);
+        pubkey.setModulus(modulus,(short) 0, modlen); 
+        rsaCipher.init(pubkey, Cipher.MODE_ENCRYPT);    
+    }
+
+    public static void rsaEncryption(APDU apdu) {
+        byte[]    apdubuf = apdu.getBuffer();
+        short     dataLen = apdu.setIncomingAndReceive();
+        short     ctLen;
+
+        ctLen = rsaCipher.doFinal(apdubuf, ISO7816.OFFSET_CDATA, dataLen, apdubuf, (short) 0);
+        apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, ctLen);        
+    }
+   
 }
 
