@@ -12,6 +12,21 @@ import javacard.framework.*;
 import javacard.security.*;
 import javacardx.crypto.*;
 
+
+import javacard.framework.APDU;
+import javacard.framework.Applet;
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
+import javacard.framework.Util;
+import javacard.security.KeyBuilder;
+import javacard.security.KeyPair;
+import javacard.security.RSAPrivateCrtKey;
+import javacard.security.RSAPublicKey;
+import javacardx.crypto.Cipher;
+
+
+
+
 /**
  *
  * @author rajesh
@@ -37,6 +52,8 @@ public class CryptoBoxApplet extends javacard.framework.Applet
     final static byte INS_REQUESTENCKEY              = (byte) 0x61;
     final static byte INS_RESETPIN                   = (byte) 0x62;
     final static byte INS_GENERATEANDSETKEY          = (byte) 0x63;
+    final static byte INS_GEN_RSA_KEY_PAIR           = (byte) 0x64;
+
 
     final static short ARRAY_LENGTH                   = (short) 0xff;
     final static byte  AES_BLOCK_LENGTH               = (short) 0x16;
@@ -46,12 +63,13 @@ public class CryptoBoxApplet extends javacard.framework.Applet
     final static short SW_CIPHER_DATA_LENGTH_BAD     = (short) 0x6710;
     final static short SW_OBJECT_NOT_AVAILABLE       = (short) 0x6711;
     final static short SW_BAD_PIN                    = (short) 0x6900;
-    
+
+    /* For testing --disabled now
     private static final byte password[] = {(byte) 0xED, (byte) 0x9C, (byte) 0xB3, (byte) 0x16, (byte) 0x00,
             (byte) 0x66, (byte) 0x72, (byte) 0xBA, (byte) 0x79, (byte) 0x6C, (byte) 0x84, (byte) 0x59, (byte) 0xB6, (byte) 0xB5,
             (byte) 0x0A, (byte) 0x88, (byte) 0x21, (byte) 0x6B, (byte) 0x84, (byte) 0x7F, (byte) 0x51, (byte) 0xC2, (byte) 0xA4,
             (byte) 0xFF, (byte) 0x16, (byte) 0x23, (byte) 0x2C, (byte) 0x8D, (byte) 0x8C, (byte) 0xDB, (byte) 0xCA, (byte) 0x00};
-            
+    */
 
     private   AESKey         m_aesKey = null;
     private   AESKey         m_aesKey_mac = null;   //added for pv204
@@ -65,8 +83,11 @@ public class CryptoBoxApplet extends javacard.framework.Applet
     private   KeyPair        m_keyPair = null;
     private   Key            m_privateKey = null;
     private   Key            m_publicKey = null;
-    private   byte           tag[] = null;   //stores mac 
+    private   Cipher         rsaCipher=null;
+    private   byte           tag[] = null;   //stores mac
     private   byte           userPIN[] = null;
+    private   byte           password[] = null;
+    
     //cryptobox parameters
     private   byte      r1[] = new byte[20];    //store random1
     private   byte      r2[] = new byte[20];    //store random2
@@ -74,9 +95,10 @@ public class CryptoBoxApplet extends javacard.framework.Applet
     private   byte      MK[] = new byte[32];    //store MK (MAC Key)
     private   byte      SK[] = new byte[32];    //store SK (Session Key)
     private   byte      receivedMAC[] = new byte[16];    //store received mac_tag
-    private   byte      calculatedMAC[] = new byte[16];  //store received mac_tag   
+    private   byte      calculatedMAC[] = new byte[16];  //store received mac_tag
     private   byte      rc[] = new byte[16];    //store nonce
-    //private   byte      password[] = new byte[32];   //store KEY
+    
+
 
     private   short          m_apduLogOffset = (short) 0;
     // TEMPORARRY ARRAY IN RAM
@@ -88,7 +110,7 @@ public class CryptoBoxApplet extends javacard.framework.Applet
      * Default constructor
      * Only this class's install method should create the applet object.
      */
-    
+
     protected CryptoBoxApplet(byte[] buffer, short offset, byte length)
     {
         // data offset is used for application specific parameter.
@@ -130,8 +152,8 @@ public class CryptoBoxApplet extends javacard.framework.Applet
             //initialize userPIN
             userPIN = new byte[4];    //store random1
             Util.arrayFillNonAtomic(userPIN, (short) 0, (short) 4, (byte) 0);
-            
-            //initiliaze cryptobox parameters    
+
+            //initiliaze cryptobox parameters
             Util.arrayFillNonAtomic(r1, (short) 0, (short) 20, (byte) 0);
             Util.arrayFillNonAtomic(r2, (short) 0, (short) 20, (byte) 0);
             Util.arrayFillNonAtomic(rp, (short) 0, (short) 16, (byte) 0);
@@ -141,10 +163,9 @@ public class CryptoBoxApplet extends javacard.framework.Applet
             Util.arrayFillNonAtomic(calculatedMAC, (short) 0, (short) 16, (byte) 0);
             Util.arrayFillNonAtomic(rc, (short) 0, (short) 16, (byte) 0);
             //Util.arrayFillNonAtomic(password, (short) 0, (short) 32, (byte) 0);
-      
-            //set password as random key
-            //m_secureRandom.generateData(password, (short) 0, (short)16);
+
             
+
             // CREATE AES KEY OBJECT
             m_aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_256, false);
             //added for pv204
@@ -160,7 +181,7 @@ public class CryptoBoxApplet extends javacard.framework.Applet
 
             // TEMPORARY BUFFER USED FOR FAST OPERATION WITH MEMORY LOCATED IN RAM
             m_ramArray = JCSystem.makeTransientByteArray((short) 260, JCSystem.CLEAR_ON_DESELECT);
-            
+
 
             // SET KEY VALUE
             m_aesKey.setKey(m_dataArray, (short) 0);
@@ -177,7 +198,8 @@ public class CryptoBoxApplet extends javacard.framework.Applet
 
             // CREATE RSA KEYS AND PAIR
             m_keyPair = new KeyPair(KeyPair.ALG_RSA_CRT, KeyBuilder.LENGTH_RSA_1024);
-            
+            rsaCipher = Cipher.getInstance(Cipher.ALG_RSA_PKCS1, false);
+
             // INIT HASH ENGINE
             try {
                 m_hash = MessageDigest.getInstance(MessageDigest.ALG_SHA_256, false);
@@ -201,7 +223,7 @@ public class CryptoBoxApplet extends javacard.framework.Applet
           register();
     }
 
-    
+
     /**
      * Method installing the applet.
      * @param bArray the array constaining installation parameters
@@ -210,7 +232,7 @@ public class CryptoBoxApplet extends javacard.framework.Applet
      */
     public static void install(byte[] bArray, short bOffset, byte bLength) throws ISOException
     {
-        // applet  instance creation 
+        // applet  instance creation
         new CryptoBoxApplet (bArray, bOffset, bLength);
     }
 
@@ -221,7 +243,7 @@ public class CryptoBoxApplet extends javacard.framework.Applet
     public boolean select()
     {
         // <PUT YOUR SELECTION ACTION HERE>
-        
+
       return true;
     }
 
@@ -269,9 +291,10 @@ public class CryptoBoxApplet extends javacard.framework.Applet
                 case INS_SIGNDATA: Sign(apdu); break;
                 case INS_GETAPDUBUFF: GetAPDUBuff(apdu); break;
                 case INS_GENERATEANDSETKEY: GenerateAndSetKey(apdu); break;
-                case INS_KEYSETUP: KeySetup(apdu); break;
+                case INS_KEYSETUP: rsaDecrypt(apdu); break;
                 case INS_REQUESTENCKEY: RequestEncKey(apdu); break;
                 case INS_RESETPIN: ResetPIN(apdu); break;
+                case INS_GEN_RSA_KEY_PAIR: genAsymmetricKeyPair(apdu); break;
                 default :
                     // The INS code is not supported by the dispatcher
                     ISOException.throwIt( ISO7816.SW_INS_NOT_SUPPORTED ) ;
@@ -297,7 +320,7 @@ public class CryptoBoxApplet extends javacard.framework.Applet
       m_encryptCipher.init(m_aesKey, Cipher.MODE_ENCRYPT);
       m_decryptCipher.init(m_aesKey, Cipher.MODE_DECRYPT);
     }
-    
+
     // SET ENCRYPTION & DECRYPTION KEY
     //added for pv204
     void SetMACKey(APDU apdu) {
@@ -314,7 +337,7 @@ public class CryptoBoxApplet extends javacard.framework.Applet
       m_encryptCipher_mac.init(m_aesKey_mac, Cipher.MODE_ENCRYPT);
       //m_decryptCipher.init(m_aesKey, Cipher.MODE_DECRYPT);
     }
-    
+
     // ENCRYPT INCOMING BUFFER
      void Encrypt(APDU apdu) {
       byte[]    apdubuf = apdu.getBuffer();
@@ -333,14 +356,14 @@ public class CryptoBoxApplet extends javacard.framework.Applet
       // SEND OUTGOING BUFFER
       apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, dataLen);
     }
-     
+
      // ENCRYPT INCOMING BUFFER
      //added for pv204
    void ComputeMAC(byte [] buff) {
       //byte[]    apdubuf = apdu.getBuffer();
       //short     dataLen = apdu.setIncomingAndReceive();
       short dataLen = (short) buff.length;
-     
+
       //short     i;
 
       // CHECK EXPECTED LENGTH (MULTIPLY OF 64 bites)
@@ -355,7 +378,7 @@ public class CryptoBoxApplet extends javacard.framework.Applet
 
       // SEND OUTGOING BUFFER
       //apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, dataLen);
-      
+
     }
 
     // DECRYPT INCOMING BUFFER
@@ -424,7 +447,7 @@ public class CryptoBoxApplet extends javacard.framework.Applet
       // SET NEW PIN
       m_pin.update(apdubuf, ISO7816.OFFSET_CDATA, (byte) dataLen);
       Util.arrayCopyNonAtomic(apdubuf, ISO7816.OFFSET_CDATA, userPIN, (short) 0, (short) 4);
-      
+
       //System.out.println("PIN setup completed"); //for testing --to be removed
     }
 
@@ -446,8 +469,8 @@ public class CryptoBoxApplet extends javacard.framework.Applet
      m_keyPair.genKeyPair();
 
      // OBTAIN KEY REFERENCES
-     m_publicKey = m_keyPair.getPublic();
-     m_privateKey = m_keyPair.getPrivate();
+     //m_publicKey = m_keyPair.getPublic();
+     //m_privateKey = m_keyPair.getPrivate();
 
      // CREATE SIGNATURE OBJECT
      //Signature m_sign = Signature.getInstance(Signature.ALG_RSA_SHA_PKCS1, false);
@@ -475,7 +498,7 @@ public class CryptoBoxApplet extends javacard.framework.Applet
     // SEND OUTGOING BUFFER
     apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, tempLength);
   }
-   
+
    ////////////////////////Rajesh Pal's Function///////////////////////
 
 // GENERATE RANDOM KEY AND SET ENCRYPTION & DECRYPTION KEY FOR AES
@@ -495,36 +518,49 @@ public class CryptoBoxApplet extends javacard.framework.Applet
       // INIT CIPHERS WITH NEW KEY
       m_encryptCipher.init(m_aesKey, Cipher.MODE_ENCRYPT);
       m_decryptCipher.init(m_aesKey, Cipher.MODE_DECRYPT);
-      
+
       //The secret key is not returned back to the host application; enable following line for testing
       //apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, apdubuf[ISO7816.OFFSET_P1]);
     }
     
+    //decrypt APDU using RSA 
+    void rsaDecrypt(APDU apdu) {
+     byte[]    apdubuf = apdu.getBuffer();
+     short     dataLen = apdu.setIncomingAndReceive();
+     short     decryptLen = 0;
+     
+     decryptLen = rsaCipher.doFinal(apdubuf, ISO7816.OFFSET_CDATA, dataLen, m_ramArray, (short) 0);
+     Util.arrayCopyNonAtomic(m_ramArray, (short) 0, apdubuf, (short) 0, decryptLen);
+          
+     // SEND OUTGOING BUFFER
+     KeySetup(apdu, apdubuf);
+     }
+
     //key setup function
-     void KeySetup(APDU apdu) {
-      byte[]    apdubuf = apdu.getBuffer();
-      short     dataLen = apdu.setIncomingAndReceive();
-      
+     void KeySetup(APDU apdu, byte[] apdubuf) {
+      //byte[]    apdubuf = apdu.getBuffer();
+      //short     dataLen = apdu.setIncomingAndReceive();
+
       /*** Step1: check integrity of packet ***/
-      
+
       //get R1 (=PIN||r1)
       Util.arrayCopyNonAtomic(userPIN, (short) 0, r1, (short) 0, (short) 4);
       Util.arrayCopyNonAtomic(apdubuf, ISO7816.OFFSET_CDATA, r1, (short) 4, (short) 16);
       //System.out.println("R1: " + bytesToHex(r1));
-      
+
       //get R2 (=PIN||r2)
       Util.arrayCopyNonAtomic(userPIN, (short) 0, r2, (short) 0, (short) 4);
       Util.arrayCopyNonAtomic(apdubuf, (short)(ISO7816.OFFSET_CDATA + 16), r2, (short) 4, (short) 16);
       //System.out.println("R2: " + bytesToHex(r2));
-      
+
       //get Rp (encrypted)
       Util.arrayCopyNonAtomic(apdubuf, (short)(ISO7816.OFFSET_CDATA + 32), rp, (short) 0, (short) 16);
       //System.out.println("Rp: " + bytesToHex(rp));
-      
+
       //get MAC
       Util.arrayCopyNonAtomic(apdubuf, (short)(64), receivedMAC, (short) 0, (short) 16);
       //System.out.println("receivedMAC: " + bytesToHex(receivedMAC));
-      
+
       //compute SK (=SHA256(PIN||r1))
       if (m_hash != null) {
           m_hash.doFinal(r1, (short) 0, (short) 20, m_ramArray, (short) 0);
@@ -551,19 +587,19 @@ public class CryptoBoxApplet extends javacard.framework.Applet
       m_encryptCipher_mac.doFinal(apdubuf, (short) 0, (short) 64, m_ramArray, (short) 0);
       Util.arrayCopyNonAtomic(m_ramArray, (short) 48, calculatedMAC, (short) 0, (short) 16);
       //System.out.println("calculatedMAC: " + bytesToHex(calculatedMAC));
-      
+
       //check if receivedMAC and calculatedMAC matches
       byte compareResult = Util.arrayCompare(receivedMAC, (short) 0, calculatedMAC, (short) 0, (short) 16);
-      if(compareResult != 0) { //System.out.println("Error: MAC unmatched"); 
+      if(compareResult != 0) { //System.out.println("Error: MAC unmatched");
       ISOException.throwIt(SW_KEY_LENGTH_BAD);}
-      
+
       //decrypt and get RP
       m_aesKey.setKey(SK, (short) 0);
       m_decryptCipher.init(m_aesKey, Cipher.MODE_DECRYPT);
       m_decryptCipher.doFinal(apdubuf, (short) 37, (short) 16, m_ramArray, (short) 0);
       Util.arrayCopyNonAtomic(m_ramArray, (short) 0, rp, (short) 0, (short) 16);
       //System.out.println("decrypted_Rp: " + bytesToHex(rp));
-      
+
       /*prepare response APDU (copy rp, rc, mac)*/
       //pack rp
       short lastByteRp = rp[15];
@@ -584,44 +620,44 @@ public class CryptoBoxApplet extends javacard.framework.Applet
       //System.out.println("afterMAC: " + bytesToHex(m_ramArray));
       Util.arrayCopyNonAtomic(m_ramArray, (short) 16, apdubuf, (short) (32), (short) 16);
       //System.out.println("responseAPDC: " + bytesToHex(apdubuf));
-      
+
       // SEND OUTGOING BUFFER
       apdu.setOutgoingAndSend((short) 0, (short) 48);
-      
+
       //prepare expected rp, rc
       lastByteRp = rp[15];
       rp[15] = (byte) (lastByteRp + 1);
       short lastByteRc = rc[15];
       rc[15] = (byte) (lastByteRc + 1);
-      
+
     }
-     
-     
-     
-     
+
+
+
+
      ///////////////////////////////////////////////////////////////////////////
      void RequestEncKey(APDU apdu) {
       byte[]    apdubuf = apdu.getBuffer();
       short     dataLen = apdu.setIncomingAndReceive();
-      
+
       /*** Step1: check integrity of packet ***/
       //take out received MAC
       Util.arrayCopyNonAtomic(apdubuf, (short)(48), receivedMAC, (short) 0, (short) 16);
       //System.out.println("receivedMAC_requestEncKey: " + bytesToHex(receivedMAC));
-      
+
       //compute calculated_MAC
       m_aesKey_mac.setKey(MK, (short) 0);
       m_encryptCipher_mac.init(m_aesKey_mac, Cipher.MODE_ENCRYPT);
       m_encryptCipher_mac.doFinal(apdubuf, (short) 0, (short) 48, m_ramArray, (short) 0);
       Util.arrayCopyNonAtomic(m_ramArray, (short) 32, calculatedMAC, (short) 0, (short) 16);
       //System.out.println("calculatedMAC_requestEncKe: " + bytesToHex(calculatedMAC));
-      
+
       //check if receivedMAC and calculatedMAC matches, then accept packet
       byte compareResult = Util.arrayCompare(receivedMAC, (short) 0, calculatedMAC, (short) 0, (short) 16);
-      if(compareResult != 0) { //System.out.println("Error: MAC unmatched"); 
+      if(compareResult != 0) { //System.out.println("Error: MAC unmatched");
       ISOException.throwIt(SW_KEY_LENGTH_BAD);}
       //else System.out.println("MAC matched");
-      
+
       /*** Step2: check freshness ***/
       byte rp_rcvd[] = new byte[16];    //rp_rcvd == rp (already incremented in prev step)
       byte rc_rcvd[] = new byte[16];    //rc_rcvd == rc (already incremented in prev step)
@@ -630,32 +666,32 @@ public class CryptoBoxApplet extends javacard.framework.Applet
       m_aesKey.setKey(SK, (short) 0);
       m_decryptCipher.init(m_aesKey, Cipher.MODE_DECRYPT);
       m_decryptCipher.doFinal(apdubuf, ISO7816.OFFSET_CDATA, (short) 32, m_ramArray, (short) 0);
-      
+
       //get rp_rcvd (encrypted)
       Util.arrayCopyNonAtomic(m_ramArray, (short) 0, rp_rcvd, (short) 0, (short) 16);
       //System.out.println("Rp_rcvd: " + bytesToHex(rp_rcvd));
-      
+
       //get rc_rcvd (encrypted)
       Util.arrayCopyNonAtomic(m_ramArray, (short)(16), rc_rcvd, (short) 0, (short) 16);
       //System.out.println("Rc_rcvd: " + bytesToHex(rc_rcvd));
-      
+
       //System.out.println("Rc_requestEncKey: " + bytesToHex(rc));
       //check if rp_rcvd==rp and rc_rcvd==rc
       byte ret = Util.arrayCompare(rp_rcvd, (short) 0, rp, (short) 0, (short) 16);
-      if(ret != 0) { 
-          //System.out.println("Error: Rp unmatched"); 
+      if(ret != 0) {
+          //System.out.println("Error: Rp unmatched");
           ISOException.throwIt(SW_KEY_LENGTH_BAD);}
       else {
           byte ret1 = Util.arrayCompare(rc_rcvd, (short) 0, rc, (short) 0, (short) 16);
-          if(ret1 != 0) { 
+          if(ret1 != 0) {
               //System.out.println("Error: Rc unmatched");
               ISOException.throwIt(SW_KEY_LENGTH_BAD);}
           //else {
           //    System.out.println("Freshness checked, found OK.");
           //}
        }
-          
-       /*** Step3: Provide KEY (in encrypted form) ***/ 
+
+       /*** Step3: Provide KEY (in encrypted form) ***/
        //prepare response APDU (copy KEY, rp+2, rc+1, mac)
        Util.arrayCopyNonAtomic(password, (short) 0, m_ramArray, (short) 0, (short) 32);
        //increment and copy rp
@@ -676,11 +712,11 @@ public class CryptoBoxApplet extends javacard.framework.Applet
       //System.out.println("afterMAC: " + bytesToHex(m_ramArray));
       Util.arrayCopyNonAtomic(m_ramArray, (short) 48, apdubuf, (short) (64), (short) 16);
       //System.out.println("responseAPDC: " + bytesToHex(apdubuf));
-      
-      
+
+
       // SEND OUTGOING BUFFER
       apdu.setOutgoingAndSend((short) 0, (short) 80);
-      
+
       //prepare expected rp, rc
       lastByteRp = rp[15];
       rp[15] = (byte) (lastByteRp + 1);
@@ -689,40 +725,34 @@ public class CryptoBoxApplet extends javacard.framework.Applet
       //close secure channel
       Util.arrayFillNonAtomic(MK, (short) 0, (short) 32, (byte) 0);
       Util.arrayFillNonAtomic(SK, (short) 0, (short) 32, (byte) 0);
-    
+
      }
-     
-     
-     
-     
-     
-     
-     
+
      ///////////////////////////////////////////////////////////////////////////
-     
+
      void ResetPIN(APDU apdu){
       byte[]    apdubuf = apdu.getBuffer();
       short     dataLen = apdu.setIncomingAndReceive();
-      
+
       /*** Step1: check integrity of packet ***/
       //take out received MAC
       Util.arrayCopyNonAtomic(apdubuf, (short)(64), receivedMAC, (short) 0, (short) 16);
       //System.out.println("receivedMAC_requestEncKey: " + bytesToHex(receivedMAC));
-      
+
       //compute calculated_MAC
       m_aesKey_mac.setKey(MK, (short) 0);
       m_encryptCipher_mac.init(m_aesKey_mac, Cipher.MODE_ENCRYPT);
       m_encryptCipher_mac.doFinal(apdubuf, (short) 0, (short) 64, m_ramArray, (short) 0);
       Util.arrayCopyNonAtomic(m_ramArray, (short) 48, calculatedMAC, (short) 0, (short) 16);
       //System.out.println("calculatedMAC_requestEncKe: " + bytesToHex(calculatedMAC));
-      
+
       //check if receivedMAC and calculatedMAC matches, then accept packet
       byte compareResult = Util.arrayCompare(receivedMAC, (short) 0, calculatedMAC, (short) 0, (short) 16);
-      if(compareResult != 0) { 
-          //System.out.println("Error: MAC unmatched"); 
+      if(compareResult != 0) {
+          //System.out.println("Error: MAC unmatched");
           ISOException.throwIt(SW_KEY_LENGTH_BAD);}
       //else System.out.println("MAC matched");
-      
+
       /*** Step2: check freshness ***/
       byte rp_rcvd[] = new byte[16];    //rp_rcvd == rp (already incremented in prev step)
       byte rc_rcvd[] = new byte[16];    //rc_rcvd == rc (already incremented in prev step)
@@ -731,34 +761,34 @@ public class CryptoBoxApplet extends javacard.framework.Applet
       m_aesKey.setKey(SK, (short) 0);
       m_decryptCipher.init(m_aesKey, Cipher.MODE_DECRYPT);
       m_decryptCipher.doFinal(apdubuf, ISO7816.OFFSET_CDATA, (short) 48, m_ramArray, (short) 0);
-      
+
       //get rp_rcvd (encrypted)
       Util.arrayCopyNonAtomic(m_ramArray, (short) 0, rp_rcvd, (short) 0, (short) 16);
       //System.out.println("Rp_rcvd: " + bytesToHex(rp_rcvd));
-      
+
       //get rc_rcvd (encrypted)
       Util.arrayCopyNonAtomic(m_ramArray, (short)(16), rc_rcvd, (short) 0, (short) 16);
       //System.out.println("Rc_rcvd: " + bytesToHex(rc_rcvd));
-      
-      
+
+
       //check if rp_rcvd==rp and rc_rcvd==rc
       byte ret = Util.arrayCompare(rp_rcvd, (short) 0, rp, (short) 0, (short) 16);
-      if(ret != 0) { //System.out.println("Error: Rp unmatched"); 
+      if(ret != 0) { //System.out.println("Error: Rp unmatched");
           ISOException.throwIt(SW_KEY_LENGTH_BAD);}
       else {
           byte ret1 = Util.arrayCompare(rc_rcvd, (short) 0, rc, (short) 0, (short) 16);
-          if(ret1 != 0) { //System.out.println("Error: Rc unmatched"); 
+          if(ret1 != 0) { //System.out.println("Error: Rc unmatched");
               ISOException.throwIt(SW_KEY_LENGTH_BAD);}
           //else {
           //    System.out.println("Freshness checked, found OK.");
           //}
        }
-      
+
       //get new PIN
       Util.arrayCopyNonAtomic(m_ramArray, (short)(37), userPIN, (short) 0, (short) 4);
       m_pin.update(userPIN, (short)(0), (byte) 4);
       //System.out.println("user new PIN: " + userPIN);
-          
+
        /*** Step3: Provide Acknowledgment ***/
        //increment and copy rp
       short lastByteRp = rp[15];
@@ -776,11 +806,11 @@ public class CryptoBoxApplet extends javacard.framework.Applet
       m_encryptCipher_mac.doFinal(apdubuf, (short) 0, (short) 32, m_ramArray, (short) 0);
       //System.out.println("afterMAC: " + bytesToHex(m_ramArray));
       Util.arrayCopyNonAtomic(m_ramArray, (short) 16, apdubuf, (short) (32), (short) 16);
-      
-      
+
+
       // SEND OUTGOING BUFFER
       apdu.setOutgoingAndSend((short) 0, (short) 48);
-      
+
       //prepare expected rp, rc
       lastByteRp = rp[15];
       rp[15] = (byte) (lastByteRp + 1);
@@ -789,7 +819,50 @@ public class CryptoBoxApplet extends javacard.framework.Applet
       //close secure channel
       Util.arrayFillNonAtomic(MK, (short) 0, (short) 32, (byte) 0);
       Util.arrayFillNonAtomic(SK, (short) 0, (short) 32, (byte) 0);
-    
-     }
-    
+
+    }
+
+    void genAsymmetricKeyPair(APDU apdu) {
+        if( m_publicKey == null ){
+            // STARTS KEY GENERATION PROCESS
+            m_keyPair.genKeyPair();
+
+            // OBTAIN KEY REFERENCES
+            m_publicKey = m_keyPair.getPublic();
+            m_privateKey = m_keyPair.getPrivate();
+            
+            rsaCipher.init(m_privateKey, Cipher.MODE_DECRYPT);    
+        }
+        
+        if(password == null){
+            password = new byte[32];   //store KEY
+            m_secureRandom.generateData(password, (short) 0, (short) 32);
+        }
+            
+        sendRSAPublicKey(apdu, ((RSAPublicKey)(m_keyPair.getPublic())));
+    }
+
+    private void sendRSAPublicKey(APDU apdu, RSAPublicKey key) {
+       short le = apdu.setOutgoing();
+       short pos = 0;
+
+       m_ramArray[pos++] = (byte) 0x7F; // Interindustry template for nesting one set of public key data objects.
+       m_ramArray[pos++] = (byte) 0x49; // "
+       m_ramArray[pos++] = (byte) 0x82; // Length field: 3 Bytes.
+       m_ramArray[pos++] = (byte) 0x01; // Length : 265 Bytes.
+       m_ramArray[pos++] = (byte) 0x09; // "
+
+       m_ramArray[pos++] = (byte) 0x81; // RSA public key modulus tag.
+       m_ramArray[pos++] = (byte) 0x82; // Length field: 3 Bytes.
+       m_ramArray[pos++] = (byte) 0xFF; // Length: 256 bytes.
+       m_ramArray[pos++] = (byte) 0x00; // "
+       pos += key.getModulus(m_ramArray, pos);
+
+       m_ramArray[pos++] = (byte) 0x82; // RSA public key exponent tag.
+       m_ramArray[pos++] = (byte) 0x03; // Length: 3 Bytes.
+       pos += key.getExponent(m_ramArray, pos);
+       apdu.setOutgoingLength(pos);
+       apdu.sendBytesLong(m_ramArray, (short) 0, pos);
+   }
+
 }
