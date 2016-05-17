@@ -20,7 +20,7 @@
 
 \title{
 \normalfont \normalsize
-\textsc{Masaryk University} \\ [25pt]
+\textsc{PV204} \\ [25pt]
 \horrule{0.5pt} \\[0.4cm]
 \huge Project 2: Review  \\
 \horrule{2pt} \\[0.5cm]
@@ -40,7 +40,7 @@ For example, the PIN in the verification process is sent in plain and could be i
 The secret data stored on the card are sent encrypted but with a static (hardcoded) key and IV which adds no security.
 Even if every client had its own application with randomly generated key, storing the key this way makes the application completely unsecure.
 
-The application does not authenticate the card in any way and the card could be replaced by a malicious one.
+The application does not authenticate the applet in any way and the card could be replaced by a malicious one.
 
 The security improvement of using this implementation is therefore questionable.
 % TODO: but it IS using random number generator of the javacard
