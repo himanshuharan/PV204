@@ -1,4 +1,4 @@
-\documentclass[paper=a4, fontsize=10pt]{scrartcl}
+\documentclass[paper=a4, fontsize=12pt]{scrartcl}
 
 \usepackage[T1]{fontenc}
 \usepackage[english]{babel}
@@ -12,13 +12,14 @@
 \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0pt}
 \setlength{\headheight}{13.6pt}
+\usepackage[margin=1in]{geometry}
 
-\setlength\parindent{0pt}
+%\setlength\parindent{0pt}
 
 \newcommand{\horrule}[1]{\rule{\linewidth}{#1}}
 
-\title{	
-\normalfont \normalsize 
+\title{
+\normalfont \normalsize
 \textsc{Masaryk University} \\ [25pt]
 \horrule{0.5pt} \\[0.4cm]
 \huge Project 2: Review  \\
@@ -30,8 +31,24 @@
 \begin{document}
 \maketitle
 
-\section{section}
-...
-\subsection{subsection}
-...
+\section{Introduction}
+\subsection{Secure channel}
+The design document states that there will be a secure channel between the card and the application using encryption, session keys and HMAC.
+However, there is no code that implements any of those
+For example, the PIN in the verification process is sent in plain and could be intercepted.
+
+The secret data stored on the card are sent encrypted but with a static (hardcoded) key and IV which adds no security.
+Even if every client had its own application with randomly generated key, storing the key this way makes the application completely unsecure.
+
+The application does not authenticate the card in any way and the card could be replaced by a malicious one.
+
+The security improvement of using this implementation is therefore questionable.
+% TODO: but it IS using random number generator of the javacard
+
+\section{JPass}
+
+\section{JPass Applet}
+
+\section{Conclusion}
+
 \end{document}
