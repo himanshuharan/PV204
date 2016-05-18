@@ -53,6 +53,8 @@ Access to "slots" is implemented using the \verb@P1@ parameter in the APDU.
 There is no authorization when getting data from the card.
 An attacker can access all the data (which is encrypted with the same key) just by changing the \verb@P1@ parameter.
 
+Also note that changing the pin changes the global pin, not a pin tied to any identifier.
+
 \section{JPass}
 PC-App sends encrypted password to Javacard
 The encryption is done by some default key in the pc-app ( yet to be find out )
