@@ -13,6 +13,8 @@
 \renewcommand{\footrulewidth}{0pt}
 \setlength{\headheight}{13.6pt}
 \usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\graphicspath{ {images/} }
 
 %\setlength\parindent{0pt}
 
@@ -41,6 +43,7 @@ The secret data stored on the card are sent encrypted but with a static (hardcod
 Even if every client had its own application with randomly generated key, storing the key this way makes the application completely unsecure.
 
 The application does not authenticate the applet in any way and the card could be replaced by a malicious one.
+And since the applet uses same AID as the SimpleAppet from class, even the SimpleApplet loaded on the card works for generating passwords.
 
 The security improvement of using this implementation is therefore questionable.
 % TODO: but it IS using random number generator of the javacard
@@ -56,11 +59,23 @@ An attacker can access all the data (which is encrypted with the same key) just 
 Also note that changing the pin changes the global pin, not a pin tied to any identifier.
 
 \section{JPass}
-PC-App sends encrypted password to Javacard.
+PC-App sends encrypted password to Javacard. %%% Roman: please write more about this or I will have to rewrite it
 %The encryption is done by some default key in the pc-app ( yet to be find out ) %%% Roman: this is already explained in the Secure channel part
+
 \subsection{Compilation}
-%Only \emph{gradle} works, compilation using \emph{maven} is broken. %%% does not work either
-\section{GUI}
+Without any changes, compilation does not work with any of the two suggested tools.
+\verb@Maven@ works after adding dependency for \verb@jcardsim@.
+
+\subsection{Testing}
+The modified application works.
+However, only generating passwords works using a smart card.
+Trying to save or load data ends with an error:
+
+\includegraphics[scale=0.5]{jpass_error}
+
+\subsubsection{Static analysis}
+% TODO
+
 
 \section{JPass Applet}
 JavaCard stores the password and other metadata.
