@@ -2,25 +2,65 @@
 \usepackage{beamerthemesplit} % new 
 \begin{document}
 \title{Project Review} 
-\author{Roman Kollar, Rajesh Kumar Pal,\\Himanshu Kumar Haran, Ameet Kumar Haware}
+\author{Roman Kollar, Rajesh Kumar Pal, Himanshu Kumar Haran, Ameet Kumar Haware}
 \date{\today} 
 
 \frame{\titlepage} 
 
 %\frame{\frametitle{Table of contents}\tableofcontents} 
-
-
 %\section{Description} 
-\frame{\frametitle{Jpass}
+\frame{\frametitle{JPass}
 \begin{itemize}
-\item TODO
+\item original JPass can generate passwords, store login data
+\item group K project goals:
+    \begin{itemize}
+        \item generate passwords on the card
+        \item store the data on the card in a secure way
+        \item authenticate the user using a PIN
+        \item communicate using a secure channel
+    \end{itemize}
 \end{itemize} 
+}
+
+\frame{\frametitle{What works}
+\begin{itemize}
+\item basically only thing that works is generating the password
+\item and even that only partially, only a seed is retrieved from the card
+\item ...without a secure channel
+\item ...without authentication of the card itself, even SimpleApplet works
+\end{itemize}
+}
+
+\frame{\frametitle{What works}
+\begin{itemize}
+\item saving the data does not work in the application
+\item if it would, the data is sent encrypted using AES
+\item ...using a static key and IV
+\end{itemize}
 }
 
 \frame{\frametitle{The applet}
 \begin{itemize}
-\item TODO
-\end{itemize} 
+\item was supposed to store data using a unique identifier tied with a PIN
+\item the PIN is global
+\item all the data is accessible by changing the P1 parameter in the APDU
+\end{itemize}
 }
+
+\frame{\frametitle{Testing}
+\begin{itemize}
+\item manual review of the code, since most of the features don't work
+\item static analysis using FindBugs, revealed som null pointer dereferences
+\end{itemize}
+}
+
+\frame{\frametitle{Conclusion}
+\begin{itemize}
+\item it's a great trojan horse
+\item easier to steal user data if they copy everything important on an easily readable card
+\item would attacking it mean trying to use it safely?
+\end{itemize}
+}
+
 \end{document}
 
