@@ -1,5 +1,4 @@
 \documentclass[paper=a4, fontsize=12pt]{scrartcl}
-
 \usepackage[T1]{fontenc}
 \usepackage[english]{babel}
 \usepackage{amsmath,amsfonts,amsthm}
@@ -11,13 +10,13 @@
 \fancyfoot[R]{\thepage}
 \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0pt}
-\setlength{\headheight}{13.6pt}
+\setlength{\headheight}{10.6pt}
 \usepackage[margin=1in]{geometry}
 \usepackage{graphicx}
 \graphicspath{ {images/} }
+\usepackage{hyperref}
 
 %\setlength\parindent{0pt}
-
 \newcommand{\horrule}[1]{\rule{\linewidth}{#1}}
 
 \title{
@@ -25,7 +24,7 @@
 \textsc{PV204} \\ [25pt]
 \horrule{0.5pt} \\[0.4cm]
 \huge Project 2: Review  \\
-\horrule{2pt} \\[0.5cm]
+\horrule{0.5pt} \\[0.5cm]
 }
 
 \author{Roman Kollar, Rajesh Kumar Pal,\\Himanshu Kumar Haran, Ameet Kumar Haware}
@@ -40,7 +39,11 @@ However, there is no code that implements any of those
 For example, the PIN in the verification process is sent in plain and could be intercepted.
 
 The secret data stored on the card are sent encrypted but with a static (hardcoded) key and IV which adds no security.
-Even if every client had its own application with randomly generated key, storing the key this way makes the application completely unsecure.
+Even if every client had its own application with randomly generated key, storing the key this way makes the application completely unsecure.\\
+\\
+\verb@          String encryptionKey = "16023FBEB58DF4EB36229286419F4589";@\\
+\verb@          String IV = "DE46F8904224A0E86E8F8F08F03BCC1A";@
+\\
 
 The application does not authenticate the applet in any way and the card could be replaced by a malicious one.
 And since the applet uses same AID as the SimpleAppet from class, even the SimpleApplet loaded on the card works for generating passwords.
@@ -52,11 +55,9 @@ The security improvement of using this implementation is therefore questionable.
 The authenticated state was supposed to be tied to an unique string indentifier of the data stored on the card.
 However, this is not true.
 The entire applet is either authenticated or not.
-Access to "slots" is implemented using the \verb@P1@ parameter in the APDU.
-There is no authorization when getting data from the card.
-An attacker can access all the data (which is encrypted with the same key) just by changing the \verb@P1@ parameter.
-
-Also note that changing the pin changes the global pin, not a pin tied to any identifier.
+Access to "slots" is implemented using the \verb@P1@ parameter in the APDU as an offset to memory.
+Since there is no authorization when getting data from the card, an attacker can access all the data (which is encrypted with the same key) just by changing the \verb@P1@ parameter.
+Also note that changing the pin changes the one global pin.
 
 \section{JPass}
 PC-App sends encrypted password to Javacard. %%% Roman: please write more about this or I will have to rewrite it
@@ -67,21 +68,20 @@ Without any changes, compilation does not work with any of the two suggested too
 \verb@Maven@ works after adding dependency for \verb@jcardsim@.
 
 \subsection{Testing}
-The modified application works.
-However, only generating passwords works using a smart card.
+The modified application runs but only generating passwords works using a smart card.
 Trying to save or load data ends with an error:
 
 \includegraphics[scale=0.5]{jpass_error}
 
 \subsection{Static analysis}
 Static analysis was done using the FindBugs tool.
-When omitting minor bugs, bad practices and bugs in the original JPass code, the only problems found were dereference of NULL pointers.
+When omitting minor bugs, bad practices and bugs in the original JPass code, the only problems found were dereferences of a NULL pointer.
 
 On line $127$ in \verb@CardInterface.java@ the pointer \verb@response@ is NULL in case the sendAPDU method throws an exception in the try--catch block starting on line $118$.
 On line $387$ of the same file the same thing with the pointer \verb@encrypted@. The program does continues after an exception and the pointer can be NULL.
 
 \section{JPass Applet}
-JavaCard stores the password and other metadata.
+JavaCard stores the password and other metadata.%%% Roman: please write more about this or I will have to rewrite it
 %There is no secure channel (This point was told by them in their ppt). %%% Roman: this is also already explained in the secure channel part, please read that first...also, what ppt? there is only a pdf in the zip file and says there IS a secure channel
 
 \section{Conclusion}
@@ -91,9 +91,10 @@ However, even this can be abused if attacker can switch the card for a malicious
 
 The only conclusion is that this project can be considered a trojan horse.
 It is only useful for attackers interested into tricking people giving up all of their private data on a card that can be more easily stolen.
-
-
-
+\\
+\\
+Source code of this document is located in the github repository:
+\\ \url{https://github.com/himanshuharan/PV204/tree/master/part2}
 
 
 \end{document}
