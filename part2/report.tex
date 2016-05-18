@@ -33,12 +33,22 @@
 \maketitle
 
 \section{Introduction}
-\subsection{Secure channel}
+%PC-App sends encrypted password to Javacard. %%% Roman: please write more about this or I will have to rewrite it
+%The encryption is done by some default key in the pc-app ( yet to be find out ) %%% Roman: this is already explained in the Secure channel part
+JPass is a simple password manager that can also generate passwords.
+The project goal was to store the data securely on a java card and also generate the passwords on it.
+
+\subsection{Compilation}
+Without any changes, compilation does not work with any of the two suggested tools.
+\verb@Maven@ works after adding a dependency entry for \verb@jcardsim@.
+
+\subsection{Analysis}
+\subsubsection{Secure channel}
 The design document states that there will be a secure channel between the card and the application using encryption, session keys and HMAC.
 However, there is no code that implements any of those
 For example, the PIN in the verification process is sent in plain and could be intercepted.
 
-The secret data stored on the card are sent encrypted but with a static (hardcoded) key and IV which adds no security.
+The secret data stored on the card are sent encrypted using AES but with a static (hardcoded) key and IV which adds no security.
 Even if every client had its own application with randomly generated key, storing the key this way makes the application completely unsecure.\\
 \\
 \verb@          String encryptionKey = "16023FBEB58DF4EB36229286419F4589";@\\
@@ -46,11 +56,11 @@ Even if every client had its own application with randomly generated key, storin
 \\
 
 The application does not authenticate the applet in any way and the card could be replaced by a malicious one.
-And since the applet uses same AID as the SimpleAppet from class, even the SimpleApplet loaded on the card works for generating passwords.
+And since the applet uses same AID as the SimpleAppet from the class, even that loaded on the card works for generating passwords.
 
 The security improvement of using this implementation is therefore questionable.
 
-\subsection{Slots}
+\subsubsection{Slots}
 The authenticated state was supposed to be tied to an unique string indentifier of the data stored on the card.
 However, this is not true.
 The entire applet is either authenticated or not.
@@ -58,19 +68,12 @@ Access to "slots" is implemented using the \verb@P1@ parameter in the APDU as an
 Since there is no authorization when getting data from the card, an attacker can access all the data (which is encrypted with the same key) just by changing the \verb@P1@ parameter.
 Also note that changing the pin changes the one global pin.
 
-\subsection{Generating a password}
+\subsubsection{Generating a password}
 Generating a password can be done using a card.
 Random generator of the card is used to generate a seed for a PRNG in the JPass application.
 Since there is no secure channel, this is also insecure.
 Attacker could change the seed to his own using MITM attack and compute the same password.
 
-\section{JPass}
-PC-App sends encrypted password to Javacard. %%% Roman: please write more about this or I will have to rewrite it
-%The encryption is done by some default key in the pc-app ( yet to be find out ) %%% Roman: this is already explained in the Secure channel part
-
-\subsection{Compilation}
-Without any changes, compilation does not work with any of the two suggested tools.
-\verb@Maven@ works after adding dependency for \verb@jcardsim@.
 
 \subsection{Testing}
 The modified application runs but only generating passwords works using a smart card.
@@ -84,10 +87,6 @@ When omitting minor bugs, bad practices and bugs in the original JPass code, the
 
 On line $127$ in \verb@CardInterface.java@ the pointer \verb@response@ is NULL in case the sendAPDU method throws an exception in the try--catch block starting on line $118$.
 On line $387$ of the same file the same thing with the pointer \verb@encrypted@. The program does continues after an exception and the pointer can be NULL.
-
-\section{JPass Applet}
-JavaCard stores the password and other metadata.%%% Roman: please write more about this or I will have to rewrite it
-%There is no secure channel (This point was told by them in their ppt). %%% Roman: this is also already explained in the secure channel part, please read that first...also, what ppt? there is only a pdf in the zip file and says there IS a secure channel
 
 \section{Conclusion}
 This project is obviosly unfinished and has no security whatsoever.
