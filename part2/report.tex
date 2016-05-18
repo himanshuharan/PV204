@@ -73,8 +73,12 @@ Trying to save or load data ends with an error:
 
 \includegraphics[scale=0.5]{jpass_error}
 
-\subsubsection{Static analysis}
+\subsection{Static analysis}
+Static analysis was done using the FindBugs tool.
+When omitting minor bugs, bad practices and bugs in the original JPass code, the only problems found were dereference of NULL pointers.
 
+On line $127$ in \verb@CardInterface.java@ the pointer \verb@response@ is NULL in case the sendAPDU method throws an exception in the try--catch block starting on line $118$.
+On line $387$ of the same file the same thing with the pointer \verb@encrypted@. The program does continues after an exception and the pointer can be NULL.
 
 \section{JPass Applet}
 JavaCard stores the password and other metadata.
