@@ -45,9 +45,19 @@ The application does not authenticate the applet in any way and the card could b
 The security improvement of using this implementation is therefore questionable.
 % TODO: but it IS using random number generator of the javacard
 
+\subsection{Slots}
+The authenticated state was supposed to be tied to an unique string indentifier of the data stored on the card.
+However, this is not true.
+The entire applet is either authenticated or not.
+Access to "slots" is implemented using the \verb@P1@ parameter in the APDU.
+There is no authorization when getting data from the card.
+An attacker can access all the data (which is encrypted with the same key) just by changing the \verb@P1@ parameter.
+
 \section{JPass}
 PC-App sends encrypted password to Javacard
 The encryption is done by some default key in the pc-app ( yet to be find out )
+\subsection{Compilation}
+Only \emph{gradle} works, compilation using \emph{maven} is broken.
 
 \section{JPass Applet}
 JavaCard store the password and other metadata
