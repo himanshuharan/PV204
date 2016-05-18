@@ -49,7 +49,6 @@ The application does not authenticate the applet in any way and the card could b
 And since the applet uses same AID as the SimpleAppet from class, even the SimpleApplet loaded on the card works for generating passwords.
 
 The security improvement of using this implementation is therefore questionable.
-% TODO: but it IS using random number generator of the javacard
 
 \subsection{Slots}
 The authenticated state was supposed to be tied to an unique string indentifier of the data stored on the card.
@@ -58,6 +57,12 @@ The entire applet is either authenticated or not.
 Access to "slots" is implemented using the \verb@P1@ parameter in the APDU as an offset to memory.
 Since there is no authorization when getting data from the card, an attacker can access all the data (which is encrypted with the same key) just by changing the \verb@P1@ parameter.
 Also note that changing the pin changes the one global pin.
+
+\subsection{Generating a password}
+Generating a password can be done using a card.
+Random generator of the card is used to generate a seed for a PRNG in the JPass application.
+Since there is no secure channel, this is also insecure.
+Attacker could change the seed to his own using MITM attack and compute the same password.
 
 \section{JPass}
 PC-App sends encrypted password to Javacard. %%% Roman: please write more about this or I will have to rewrite it
